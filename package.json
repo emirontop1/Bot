@@ -1,8 +1,10 @@
 {
-  "name": "sa-echo-bot",
+  "name": "telegram-bot",
   "version": "1.0.0",
-  "private": true,
   "dependencies": {
     "telegraf": "^4.12.0"
+  },
+  "scripts": {
+    "start": "node index.js"
   }
 }
