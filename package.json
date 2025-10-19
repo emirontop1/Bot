@@ -1,10 +1,12 @@
+// package.json
 {
-  "name": "telegram-bot",
+  "name": "telegram-lua-obfuscator",
   "version": "1.0.0",
-  "dependencies": {
-    "telegraf": "^4.12.0"
-  },
+  "type": "module",
   "scripts": {
     "start": "node index.js"
+  },
+  "dependencies": {
+    "telegraf": "^4.12.0"
   }
 }
