@@ -3,9 +3,8 @@ import { Telegraf } from "telegraf";
 
 // GÜNCELLE: Kendi bot token'ınızla DEĞİŞTİRİN
 const BOT_TOKEN = "8350124542:AAHwsh0LksJAZOW-hHTY1BTu5i8-XKGFn18";
-if (!BOT_TOKEN) {
+if (!BOT_TOKEN || BOT_TOKEN === "BURAYA_KENDİ_BOT_TOKENINIZI_YAZIN") {
     console.error("HATA: BOT_TOKEN tanımlanmadı. Lütfen index.js dosyasını güncelleyin.");
-    // Token yoksa uygulamayı durdur
     process.exit(1);
 }
 
@@ -49,13 +48,13 @@ local function ToggleGUI()
     panel:Dock(FILL)
     panel:DockMargin(5, 30, 5, 5)
 
-    -- VGUI elemanları buraya eklenir
-    ${elementsCode}
-
     -- VGUI elemanlarının düzenini ayarlama (Stacker kullanarak basitleştirildi)
     local stacker = vgui.Create("DVBoxLayout", panel)
     stacker:Dock(FILL)
     
+    -- VGUI elemanları buraya eklenir
+    ${elementsCode}
+
     -- Tüm elemanları stacker içine taşı
     for k, v in ipairs(panel:GetChildren()) do
         stacker:Add(v)
