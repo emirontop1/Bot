@@ -1,13 +1,10 @@
 // index.js
-// npm: telegraf axios
 import fs from "fs";
 import path from "path";
-import axios from "axios";
 import { Telegraf } from "telegraf";
 
-// BOT_TOKEN direkt kodda
+// TOKEN doğrudan kodda
 const BOT_TOKEN = "8350124542:AAHwsh0LksJAZOW-hHTY1BTu5i8-XKGFn18";
-
 if (!BOT_TOKEN) throw new Error("BOT_TOKEN yok");
 
 const bot = new Telegraf(BOT_TOKEN);
@@ -45,7 +42,6 @@ end
     return {oldName, rawValue, newName, isString, isNumber};
   });
 
-  // remove original local lines
   locals.forEach(l=>{
     const re = new RegExp("\\blocal\\s+"+escapeRegExp(l.oldName)+"\\s*=\\s*"+escapeRegExp(l.rawValue)+"\\s*(?:;|\\n|$)","g");
     code = code.replace(re,'');
@@ -104,9 +100,12 @@ end)()`;
   return final;
 }
 
-async function downloadFile(url){
-  const res = await axios.get(url, { responseType: 'arraybuffer' });
-  return Buffer.from(res.data);
+// download using built-in fetch
+async function downloadFileBuffer(url){
+  const res = await fetch(url);
+  if(!res.ok) throw new Error('Dosya indirilemedi: ' + res.status);
+  const ab = await res.arrayBuffer();
+  return Buffer.from(ab);
 }
 
 bot.start((ctx) => ctx.reply("Lua obfuscator aktif. Lua dosyası gönder."));
@@ -120,7 +119,7 @@ bot.on('document', async (ctx) => {
     }
     await ctx.reply("Dosya alındı. İşleniyor...");
     const fileLink = await ctx.telegram.getFileLink(doc.file_id);
-    const buf = await downloadFile(fileLink.href);
+    const buf = await downloadFileBuffer(fileLink.href);
     const text = buf.toString('utf8');
     const obf = obfuscateLua(text);
     const outName = path.parse(fileName).name + "-obf.lua";
