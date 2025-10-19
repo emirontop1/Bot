@@ -4,7 +4,8 @@ import { Telegraf } from "telegraf";
 // GÜNCELLE: Kendi bot token'ınızla DEĞİŞTİRİN
 const BOT_TOKEN = "8350124542:AAHwsh0LksJAZOW-hHTY1BTu5i8-XKGFn18";
 if (!BOT_TOKEN) {
-    console.error("HATA: BOT_TOKEN tanımlanmadı.");
+    console.error("HATA: BOT_TOKEN tanımlanmadı. Lütfen index.js dosyasını güncelleyin.");
+    // Token yoksa uygulamayı durdur
     process.exit(1);
 }
 
@@ -16,141 +17,169 @@ const USER_SESSIONS = new Map();
 
 // =========================================================================
 // LUA KOD ÜRETİCİSİ
-// Bu, basitleştirilmiş bir GMod/oyun içi Lua GUI framework'üne dayanmaktadır.
 // =========================================================================
 
 function generateLuaCode(session) {
     const guiName = session.guiName || "GeneratedGUI";
+    // Elemanlar arasına iki yeni satır ekle
     const elementsCode = session.elements.join('\n\n    ');
 
     const fullCode = `
 -- Lua GUI Kodu: ${guiName}
--- Bu kod, popüler oyun içi Lua GUI framework'leri (Örn: DarkRP, GMod VGUI) temel alınarak oluşturulmuştur.
+-- Bu kod, popüler oyun içi Lua GUI framework'leri (Örn: GMod VGUI) temel alınarak oluşturulmuştur.
 
-local frame = vgui.Create("DFrame")
-frame:SetSize(600, 500)
-frame:SetTitle("${guiName}")
-frame:Center()
-frame:SetSizable(false)
-frame:SetDraggable(true)
-frame:ShowCloseButton(true)
-frame:MakePopup()
-
--- Ana Panel (ScrollPanel olarak kullanabiliriz)
-local panel = vgui.Create("DScrollPanel", frame)
-panel:Dock(FILL)
-panel:DockMargin(5, 30, 5, 5)
-
--- VGUI elemanları buraya eklenir
-${elementsCode}
-
--- Panelin görünürlüğünü yönetmek için bir işlev
+-- Eğer menü zaten açıksa kapatır, kapalıysa açar.
 local function ToggleGUI()
-    frame:SetVisible(not frame:IsVisible())
-    if frame:IsVisible() then
-        frame:MakePopup()
+    if IsValid(frame) and frame:IsVisible() then
+        frame:Remove()
+        return
+    end
+
+    local frame = vgui.Create("DFrame")
+    frame:SetSize(600, 500)
+    frame:SetTitle("${guiName}")
+    frame:Center()
+    frame:SetSizable(true)
+    frame:SetDraggable(true)
+    frame:ShowCloseButton(true)
+    frame:MakePopup()
+
+    -- Ana Panel (ScrollPanel)
+    local panel = vgui.Create("DScrollPanel", frame)
+    panel:Dock(FILL)
+    panel:DockMargin(5, 30, 5, 5)
+
+    -- VGUI elemanları buraya eklenir
+    ${elementsCode}
+
+    -- VGUI elemanlarının düzenini ayarlama (Stacker kullanarak basitleştirildi)
+    local stacker = vgui.Create("DVBoxLayout", panel)
+    stacker:Dock(FILL)
+    
+    -- Tüm elemanları stacker içine taşı
+    for k, v in ipairs(panel:GetChildren()) do
+        stacker:Add(v)
     end
 end
 
--- Örnek Bind: [Q] tuşunu kullanarak GUI'yi açma/kapama
+-- Örnek Bind: 'Q' tuşuna basıldığında GUI'yi açma/kapama
 -- Bu kısım, oyunun Keybind sistemi ile entegre edilmelidir.
--- Örn: bind "Q" "lua_run ToggleGUI()"
+-- Örn (GMod): hook.Add("Think", "ToggleGUIMenu", function() 
+--     if input.IsKeyPressed(KEY_Q) then ToggleGUI() end
+-- end)
 
 -- Konsola bilgilendirme
-print("[GUI Creator] ${guiName} yüklendi. Komut: ToggleGUI()")
+print("[GUI Creator] ${guiName} yüklemeye hazır. Komut: ToggleGUI()")
+
+-- Botun kullanabileceği komut
+concommand.Add("toggle_${guiName.toLowerCase()}", ToggleGUI)
 `;
     return fullCode.trim();
 }
 
 /**
  * Kullanıcıdan gelen metni alarak Lua kodu üretir.
- * @param {string} type - Eklenen öğe türü (toggle, button, slider, vs.)
- * @param {string[]} args - Komut argümanları
- * @returns {string|null} Üretilen Lua kodu satırları
  */
 function createElement(type, args) {
-    const name = args[0] || 'Element' + Math.random().toString(36).slice(2, 5);
+    // Lua'da değişken isimleri harf, sayı ve alt çizgi içerebilir
+    const nameRaw = args[0] ? args[0].replace(/[^a-zA-Z0-9_]/g, '') : `Element_${Math.random().toString(36).slice(2, 5)}`;
+    
+    // Her elemanın kendine özgü bir değişken adı olmalı
+    const name = nameRaw + "_vgui"; 
+
     let luaCode = '';
+    let elementName = nameRaw; // Lua VGUI'de metin olarak kullanılan isim
+    let elementContainer = name; // VGUI objesi için kullanılan değişken adı
 
     switch (type) {
         case 'toggle':
             // Örn: /ekle toggle Toggle1
             const defaultToggleValue = args[1] === 'true' ? 'true' : 'false';
             luaCode = `
-local ${name} = vgui.Create("DCheckBoxLabel", panel)
-${name}:SetText("${name} (Toggle)")
-${name}:SetValue(${defaultToggleValue})
-${name}.OnChange = function(self, value)
-    -- print("${name} değeri: " .. tostring(value))
-    -- Oyun logiğini buraya ekle
-end
+    local ${elementContainer} = vgui.Create("DCheckBoxLabel", panel)
+    ${elementContainer}:SetText("${elementName}")
+    ${elementContainer}:SetConVar("${elementName}") -- İsteğe bağlı
+    ${elementContainer}:SetValue(${defaultToggleValue})
+    ${elementContainer}:SetTall(25)
+    ${elementContainer}:Dock(TOP)
+    ${elementContainer}.OnChange = function(self, value)
+        -- print("${elementName} değeri: " .. tostring(value))
+    end
 `;
             break;
 
         case 'button':
             // Örn: /ekle button Button1
             luaCode = `
-local ${name} = vgui.Create("DButton", panel)
-${name}:SetText("${name} (Çalıştır)")
-${name}.DoClick = function()
-    -- print("${name} tıklandı!")
-    -- İşlevi buraya ekle
-end
+    local ${elementContainer} = vgui.Create("DButton", panel)
+    ${elementContainer}:SetText("${elementName} (Çalıştır)")
+    ${elementContainer}:SetTall(30)
+    ${elementContainer}:Dock(TOP)
+    ${elementContainer}.DoClick = function()
+        -- print("${elementName} tıklandı!")
+        -- İşlevi buraya ekle
+    end
 `;
             break;
 
         case 'slider':
-            // Örn: /ekle slider Slider1 0 1 0.1
+            // Örn: /ekle slider Slider1 0 10 5
             const min = parseFloat(args[1] || 0);
             const max = parseFloat(args[2] || 1);
             const def = parseFloat(args[3] || 0.5);
             luaCode = `
-local ${name}Label = vgui.Create("DLabel", panel)
-${name}Label:SetText("${name} (${min} - ${max})")
-${name}Label:SizeToContents()
-local ${name} = vgui.Create("DSlider", panel)
-${name}:SetMin(${min})
-${name}:SetMax(${max})
-${name}:SetValue(${def})
-${name}.OnValueChange = function(self, value)
-    -- print("${name} değeri: " .. tostring(value))
-    -- Oyun logiğini buraya ekle
-end
+    local ${elementContainer} = vgui.Create("DSlider", panel)
+    ${elementContainer}:SetText("${elementName}")
+    ${elementContainer}:SetMin(${min})
+    ${elementContainer}:SetMax(${max})
+    ${elementContainer}:SetDecimals(2)
+    ${elementContainer}:SetValue(${def})
+    ${elementContainer}:SetTall(35)
+    ${elementContainer}:Dock(TOP)
+    ${elementContainer}.OnValueChange = function(self, value)
+        -- print("${elementName} değeri: " .. tostring(value))
+    end
 `;
             break;
             
         case 'textbox':
-             // Örn: /ekle textbox TextBox1
+             // Örn: /ekle textbox KullaniciAdi
             luaCode = `
-local ${name} = vgui.Create("DTextEntry", panel)
-${name}:SetPlaceholderText("${name} - Metin Girin")
-${name}:SetText("")
-${name}.OnChange = function(self)
-    -- print("${name} değeri: " .. self:GetValue())
-end
+    local ${elementContainer} = vgui.Create("DTextEntry", panel)
+    ${elementContainer}:SetPlaceholderText("${elementName} - Metin Girin")
+    ${elementContainer}:SetText("")
+    ${elementContainer}:SetTall(30)
+    ${elementContainer}:Dock(TOP)
+    ${elementContainer}.OnChange = function(self)
+        -- print("${elementName} değeri: " .. self:GetValue())
+    end
 `;
             break;
 
         case 'colorpicker':
-            // Örn: /ekle colorpicker ColorPicker1
+            // Örn: /ekle colorpicker BotRenk
             luaCode = `
-local ${name} = vgui.Create("DColorMixer", panel)
-${name}:SetText("${name}")
-${name}:SetColor(Color(255, 255, 255))
-${name}.OnColorChange = function(self, color)
-    -- print("${name} rengi: " .. tostring(color.r) .. ", " .. tostring(color.g) .. ", " .. tostring(color.b))
-    -- Renk logiğini buraya ekle
-end
+    local ${elementContainer} = vgui.Create("DColorMixer", panel)
+    ${elementContainer}:SetText("${elementName}")
+    ${elementContainer}:SetTall(150)
+    ${elementContainer}:Dock(TOP)
+    ${elementContainer}:SetColor(Color(255, 255, 255))
+    ${elementContainer}.OnColorChange = function(self, color)
+        -- print("${elementName} rengi: " .. tostring(color.r) .. ", " .. tostring(color.g) .. ", " .. tostring(color.b))
+    end
 `;
             break;
 
         case 'separator':
             // Örn: /ekle separator Section2
             luaCode = `
--- ${name} Bölücü / Ayırıcı
-local ${name}Separator = vgui.Create("DLabel", panel)
-${name}Separator:SetText("--- ${name} ---")
-${name}Separator:SizeToContents()
+    -- ${elementName} Bölücü / Ayırıcı
+    local ${elementContainer} = vgui.Create("DLabel", panel)
+    ${elementContainer}:SetText("--- ${elementName} ---")
+    ${elementContainer}:SetFont("DermaLarge")
+    ${elementContainer}:SetTextColor(Color(255, 150, 0))
+    ${elementContainer}:SetTall(30)
+    ${elementContainer}:Dock(TOP)
 `;
             break;
 
@@ -158,8 +187,8 @@ ${name}Separator:SizeToContents()
             return null; // Tanımlanmamış öğe
     }
 
-    // Basitleştirilmiş düzenleme (Her öğeden sonra boşluk bırakma)
-    return luaCode + `\n\n    panel:AddItem(${name})\n    panel:AddItem(${name}Label or ${name}Separator)`; 
+    // Üretilen kodu döndür
+    return luaCode; 
 }
 
 // =========================================================================
@@ -167,13 +196,15 @@ ${name}Separator:SizeToContents()
 // =========================================================================
 
 bot.start(async (ctx) => {
+    // Bu, botun ilk komuta verdiği cevaptır.
     await ctx.reply(
         `Merhaba ${ctx.from.first_name}! Ben Lua GUI Kod Üretici Botuyum.\n`
         + "Oyun içi menü görselinizdeki öğeleri adım adım koda çevirebiliriz.",
     );
     await ctx.reply(
         "Yeni bir GUI oluşturmak için `/basla <GUI_Adı>` komutunu kullanın.\n"
-        + "Örn: `/basla Informant_WTF_Menusu`"
+        + "Örn: `/basla Informant_WTF_Menusu`",
+        { parse_mode: 'Markdown' }
     );
 });
 
@@ -182,17 +213,21 @@ bot.command('basla', async (ctx) => {
     const args = ctx.message.text.split(/\s+/).slice(1);
     const guiName = args[0] || "YeniGUI";
     
+    // Güvenli dosya/değişken adı oluştur
+    const safeName = guiName.replace(/[^a-zA-Z0-9_]/g, '_');
+    
     // Oturumu başlat
-    USER_SESSIONS.set(ctx.from.id, { guiName: guiName.replace(/[^a-zA-Z0-9_]/g, '_'), elements: [] });
+    USER_SESSIONS.set(ctx.from.id, { guiName: safeName, elements: [] });
     
     await ctx.reply(
-        `✅ Yeni GUI oluşturuldu: **${guiName}**\n\n`
-        + "Şimdi GUI öğelerini eklemeye başlayın:\n\n"
+        `✅ Yeni GUI projesi oluşturuldu: **${safeName}**\n\n`
+        + "Şimdi GUI öğelerini eklemeye başlayın:\n"
         + "`/ekle toggle Toggle1`\n"
         + "`/ekle button Button1`\n"
-        + "`/ekle slider IslemHizi 0 10 5`\n"
+        + "`/ekle slider IslemHizi 0 10 5` (Min, Max, Vars)\n"
         + "`/ekle textbox KullaniciAdi`\n"
-        + "`/ekle separator Section2`\n\n"
+        + "`/ekle separator Section2`\n"
+        + "`/ekle colorpicker BotRenk`\n\n"
         + "İşiniz bittiğinde `/bitir` yazın.",
         { parse_mode: 'Markdown' }
     );
@@ -275,97 +310,3 @@ bot.launch().then(() => {
 // Bot durdurma mekanizmaları
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
-
-    const API_URL = `https://api.coingecko.com/api/v3/coins/markets?vs_currency=${currency}&ids=${coinId}&sparkline=false`;
-
-    try {
-        const response = await fetch(API_URL, { timeout: 10000 });
-        if (!response.ok) {
-            throw new Error(`HTTP Hata: ${response.status}`);
-        }
-        const data = await response.json();
-        
-        // API tek elemanlı bir liste döndürür
-        if (data && data.length > 0) {
-            return data[0];
-        } else {
-            return null;
-        }
-    } catch (error) {
-        console.error(`Kripto API Hatası (${coinId}):`, error.message);
-        return null;
-    }
-}
-
-// =========================================================================
-// TELEGRAM İŞLEYİCİLERİ
-// =========================================================================
-
-bot.start(async (ctx) => {
-    await ctx.reply(
-        `Merhaba ${ctx.from.first_name}! Ben Gelişmiş Kripto Analiz Botu.`,
-    );
-    await ctx.reply(
-        "Bir kripto paranın detaylarını görmek için:\n"
-        + "Örn: `/detay bitcoin` veya `/detay ethereum`",
-        { parse_mode: 'Markdown' }
-    );
-});
-
-bot.command('detay', async (ctx) => {
-    // Komut argümanlarını al (örn: ['bitcoin'])
-    const args = ctx.message.text.split(/\s+/).slice(1);
-
-    if (args.length === 0) {
-        return ctx.reply("Lütfen detayını görmek istediğiniz kripto paranın ID'sini girin.\nÖrn: `/detay bitcoin`");
-    }
-
-    const coinId = args[0].toLowerCase();
-    
-    await ctx.reply(`'${coinId.toUpperCase()}' için detaylı veriler çekiliyor...`);
-    
-    // Veriyi çek
-    const data = await getCoinDetails(coinId);
-    
-    if (!data) {
-        return ctx.reply(`Üzgünüm, '${coinId}' adında bir kripto para bulunamadı veya API'den veri alınamadı.`);
-    }
-
-    // Verileri çıkar
-    const price = data.current_price;
-    const marketCap = data.market_cap;
-    const circulatingSupply = data.circulating_supply;
-    const high24h = data.high_24h;
-    const low24h = data.low_24h;
-    const rank = data.market_cap_rank;
-    const change24h = data.price_change_percentage_24h;
-    
-    // Mesajı oluştur
-    const emoji = change24h >= 0 ? "🟢" : "🔴";
-    
-    const message = (
-        `${emoji} **${data.name} (${data.symbol.toUpperCase()}) Detaylı Analiz**\n\n`
-        + `**🏆 Sıralama:** #${rank}\n\n`
-        
-        + `**💵 Güncel Fiyat:** ${formatCurrency(price)}\n`
-        + `   24s Yüksek: ${formatCurrency(high24h)}\n`
-        + `   24s Düşük: ${formatCurrency(low24h)}\n`
-        + `   24s Değişim: ${change24h ? `${change24h.toFixed(2)}%` : 'N/A'}\n\n`
-        
-        + `**🌐 Piyasa Verileri**\n`
-        + `   Piyasa Değeri: ${formatCurrency(marketCap)}\n`
-        + `   Dolaşımdaki Arz: ${formatNumber(circulatingSupply)}\n`
-    );
-
-    await ctx.reply(message, { parse_mode: 'Markdown' });
-});
-
-
-bot.launch().then(() => {
-    console.log("🚀 Kripto Botu çalışıyor!");
-});
-
-// Bot durdurma mekanizmaları
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
-
