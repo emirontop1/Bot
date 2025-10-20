@@ -1,13 +1,14 @@
 {
-  "name": "telegram-test-bot",
+  "name": "lua-obfuscator-bot",
   "version": "1.0.0",
-  "description": "A simple Telegram bot for testing on Railway.",
+  "description": "Telegram bot for obfuscating Lua files using Node.js.",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "node-telegram-bot-api": "^0.61.0"
+    "node-telegram-bot-api": "^0.61.0",
+    "axios": "^1.6.8"
   },
   "engines": {
     "node": ">=14.0.0"
