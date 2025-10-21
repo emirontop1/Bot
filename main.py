@@ -44,6 +44,15 @@ def main():
 
 if __name__ == "__main__":
     main()
+def main():
+    updater = Updater(TOKEN, use_context=True)
+    dp = updater.dispatcher
+    dp.add_handler(MessageHandler(Filters.photo, on_photo))
+    updater.start_polling()
+    updater.idle()
+
+if __name__ == "__main__":
+    main()
 
 
 
