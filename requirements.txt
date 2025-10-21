@@ -1,0 +1,4 @@
+python-telegram-bot
+deepface
+pillow
+opencv-python
